@@ -1,1 +1,62 @@
+name: BMA alert relay
+
+on:
+  schedule:
+    # every 5 minutes, off the busy :00 mark (GitHub's shortest interval is 5 minutes; runs may be delayed)
+    - cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
+  workflow_dispatch:
+    inputs:
+      test_district:
+        description: 'Send a TEST alarm to one district instead of a normal run (e.g. idukki). Leave empty for a normal run.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bma-alerts
+  cancel-in-progress: false
+
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Run relay once
+        env:
+          FIREBASE_KEY_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          TEST_DISTRICT: ${{ inputs.test_district }}
+        run: |
+          printf '%s' "$FIREBASE_KEY_JSON" > "$RUNNER_TEMP/key.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/key.json"
+          if [ -n "$TEST_DISTRICT" ]; then
+            python sachet_push.py --test-push "$TEST_DISTRICT"
+          else
+            python sachet_push.py --once
+          fi
+          rm -f "$RUNNER_TEMP/key.json"
+
+      - name: Save state (so the same alert is not sent twice)
+        run: |
+          date -u +%F > heartbeat.txt
+          git config user.name "bma-relay"
+          git config user.email "bma-relay@users.noreply.github.com"
+          git add heartbeat.txt
+          if [ -f seen.json ]; then git add seen.json; fi
+          if ! git diff --cached --quiet; then
+            git commit -m "relay state"
+            git pull --rebase
+            git push
+          fi
 
