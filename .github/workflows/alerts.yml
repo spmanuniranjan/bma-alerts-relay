@@ -2,12 +2,11 @@ name: BMA alert relay
 
 on:
   schedule:
-    # every 5 minutes, off the busy :00 mark (GitHub's shortest interval is 5 minutes; runs may be delayed)
     - cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
   workflow_dispatch:
     inputs:
       test_district:
-        description: 'Send a TEST alarm to one district instead of a normal run (e.g. idukki). Leave empty for a normal run.'
+        description: 'Send a TEST alarm to one district (e.g. idukki). Leave empty for a normal run.'
         required: false
         default: ''
 
@@ -59,4 +58,3 @@ jobs:
             git pull --rebase
             git push
           fi
-
